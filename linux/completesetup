@@ -1,0 +1,138 @@
+Refer to this site for initial build and set up
+
+http://www.raspberrypi.org/forums/viewtopic.php?f=81&t=58758
+
+On my Windows PC:
+
+Download bluecove-2.1.0.jar and bluecove-gpl-2.1.0-sources.tar.gz from:
+http://code.google.com/p/bluecove/downloads/list
+
+Prepare source:
+1) Unzip bluecove-gpl-2.1.0-sources.tar.gz
+2) go into folder bluecove-gpl-2.1.0 and open file build.xml in a text editor
+3) Delete text '-SNAPSHOT' in line 12:
+change: <property name="product_version" value="2.1.0-SNAPSHOT"/>
+into: <property name="product_version" value="2.1.0"/>
+4) save file
+
+Open Raspberry Pi in program WinSCP and go into home folder (/home/pi)
+Create new folder named temp
+Go into temp folder (/home/pi/temp)
+Copy complete folder bluecove-gpl-2.1.0 including modified build.xml file into folder temp
+Add new folders bluecove/target into temp (/home/pi/temp/bluecove/target/)
+Copy bluecove-2.1.0.jar into folder /home/pi/temp/bluecove/target/
+(now folder temp includes two folders: bluecove-gpl-2.1.0 and bluecove)
+
+
+Open Raspberry Pi in program Putty
+
+Install Bluetooth:
+sudo apt-get update
+sudo apt-get upgrade
+sudo apt-get autoremove
+sudo apt-get install bluetooth bluez-utils blueman
+
+Connect Blutooth dongle and test if Bluetooth OK:
+/etc/init.d/bluetooth status -> check to see whether the bluetooth is live
+hcitool scan -> show any devices in range of the dongle
+
+Install the BlueZ devel package needed for compilation later:
+sudo apt-get install libbluetooth-dev
+
+Install Apache Ant:
+sudo apt-get install ant
+
+After all these updates I prefer to reboot:
+sudo reboot
+
+Go into folder bluecove-gpl-2.1.0:
+cd /home/pi/temp/bluecove-gpl-2.1.0
+
+Start compilation:
+ant all
+
+When successful compiled you can find the required gpl jar in:
+/home/pi/temp/bluecove-gpl-2.1.0/target/bluecove-gpl-2.1.0.jar
+Add the file bluecove-gpl-2.1.0.jar together with bluecove-2.1.0.jar into
+your java build path libraries of your java development program.
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+Now set up blueZ. Refer to site
+http://raspberrypi.tomasgreno.cz/bluetooth.html
+
+After successful installation, connect your bluetooth dongle and list USB devices.
+lsusb
+
+You should see dongle in statement like this:
+Bus 001 Device 002: ID 0424:9512 Standard Microsystems Corp.
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 001 Device 003: ID 0424:ec00 Standard Microsystems Corp.
+Bus 001 Device 005: ID 0a12:0001 Cambridge Silicon Radio, Ltd Bluetooth Dongle (HCI mode)
+Now, when you are sure your device is recognized, list bluetooth devices.
+hcitool dev
+You will get output with adapter name and its MAC address:
+Devices:
+        hci0    00:15:83:xx:xx:xx
+If you want detailed information about hci device, use this command:
+hciconfig -a
+I use this command because in output I can see how many bytes was transmitter and received.
+hci0:   Type: BR/EDR  Bus: USB
+        BD Address: 00:15:83:xx:xx:xx  ACL MTU: 672:3  SCO MTU: 128:2
+        UP RUNNING PSCAN
+        RX bytes:914 acl:0 sco:0 events:30 errors:0
+        TX bytes:360 acl:0 sco:0 commands:23 errors:0
+        Features: 0xff 0x3e 0x85 0x30 0x18 0x18 0x00 0x00
+        Packet type: DM1 DM3 DM5 DH1 DH3 DH5 HV1 HV2 HV3
+        Link policy: RSWITCH HOLD SNIFF
+        Link mode: SLAVE ACCEPT
+        Name: ''
+        Class: 0x000208
+        Service Classes: Unspecified
+        Device Class: Phone, Cordless
+        HCI Version: 2.0 (0x3)  Revision: 0xc5c
+        LMP Version: 2.0 (0x3)  Subversion: 0xc5c
+        Manufacturer: Cambridge Silicon Radio (10)
+
+Now you can try to scan for devices in the area.
+hcitool scan
+And it finds my phone...
+Scanning ...
+        64:99:5D:xx:xx:xx       tomas-phone
+Of course your device have to be discoverable. But how to make RPi discoverable when some user is scanning for it?
+hciconfig hci0 piscan
+If you reissue "hciconfig -a" you will see added flag ISCAN - which means device is discoverable. I tried to discover new devices in my mobile phone and...
+
+
+Next step will be pairing. When 2 devices want to communicate via bluetooth, have to be "introduced" at first (enter same PIN on both devices). First, set PIN on RPi with:
+bluetooth-agent 4554
+
+Bluetooth agent will not stop. Now you can initiate pairing from mobile..
+
+During pairing attemp, bluetooth-agent will print notification...
+Pincode request for device /org/bluez/2061/hci0/dev_64_99_5D_xx_xx_xx
+Enter PIN and "OK", Now devices should be paired and able to communicate with each other.
+
+After successful pairing, you can stop bluetooth-agent with Ctrl+C. Now when devices are paired, you can try to ping them.
+l2ping -i hci0 64:99:5D:xx:xx:xx
+Change address in black bold to your device`s MAC address. It can be found in output of "hcitool scan"
+Ping: 64:99:5D:xx:xx:xx from 00:15:83:xx:xx:xx (data size 44) ...
+44 bytes from 64:99:5D:xx:xx:xx id 0 time 18.01ms
+44 bytes from 64:99:5D:xx:xx:xx id 1 time 34.66ms
+44 bytes from 64:99:5D:xx:xx:xx id 2 time 17.65ms
+44 bytes from 64:99:5D:xx:xx:xx id 3 time 31.80ms
+44 bytes from 64:99:5D:xx:xx:xx id 4 time 14.95ms
+5 sent, 5 received, 0% loss
+Now when we are sure devices can talk to each other, you can make RPi to automaticaly accept files transmitted.
+obexpushd -B -o /root/bluetooth
+Tried to transmit a file, and success...
+
+Address in black bold is destination, where files will be stored. My RPi bluetooth dongle is always visible, but if you want to hide it, after successful pairing, you can make RPi invisible again by issuing:
+hciconfig hci0 noscan
+Of course, all of this can be available from start. Edit crontab...
+crontab -e
+And add following lines.
+@reboot sudo -u root hciconfig hci0 piscan            #make RPi discoverable
+@reboot sudo -u root obexpushd -B -o /root/bluetooth  #accept files from paired devices and save to /root/bluetooth
+@reboot sudo -u root bluetooth-agent 4554 &           #set PIN for pairing
+Edit statements in black bold. Now close file (CTRL+X...) and save changes (...press "y" and Enter). Reboot and try if all is working from start.
+
